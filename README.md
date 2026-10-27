@@ -1,204 +1,133 @@
-# Tracking Upper Limb Use in Subacute Stroke: Investigating the Relationship Between Motor Functions and Real-World Arm Use
-This sub-repository regroups the functions to analyze the association between arm activity performance (IMU-based metrics) and arm activity capacity (ARAT) across time post-stroke.
+# Longitudinal upper limb recovery: mixed-effects models and individual change detection
 
-## Step 1: Setup your config file
-In *.config\config_template.ini*
+This repository provides a **standalone, standardized implementation of the longitudinal mixed-effects modeling and model-based individual improvement detection** used in:
 
-#### **Section: [Path_raw_data]**
+> Josse E, Cheng H-J, Chin LF, et al. **Wearable-Based Digital Metrics Reveal Dynamic Dissociations Between Upper Limb Capacity and Real-World Use Over the First Six Months After Stroke.** Research Square preprint (2026). [https://doi.org/10.21203/rs.3.rs-9813697/v1](https://doi.org/10.21203/rs.3.rs-9813697/v1).
 
-Raw input files used before any preprocessing.
+**Publication status:** The link above points to the preprint. The final journal article DOI will be added when available.
 
-| Field	                | Description	                                      | Example         |
-| :-------------------- | :-------------------------------------------------- | :-------------- | 
-| home_path_to_data	    | Base directory containing clinical and IMU data     |	/database/data |
-| folder_clinical_data	| Subfolder regrouping the clinical data	      |  Clinical_data/      |
-| folder_redcap_file    | Subfolder containing the raw REDCap tables        | 20250930 |
-| redcap_table_filename | Filename of the raw REDCap Excel sheet	          | raw_redcap.xlsx |
-| folder_imu_data	    | Subfolder containing IMU-derived metrics	          | IMU_data/            |
+## Scientific rationale
 
-All paths are constructed as:
-home_path_to_data + folder_xxx + filename
+After stroke, recovery is often evaluated through standardized clinical tests of **capacity**—what a person can do under assessment conditions. Actual **performance**, such as use of the paretic arm in everyday life, may evolve differently. The accompanying study followed upper limb capacity (Action Research Arm Test, ARAT) and wearable-derived functional arm use over the first six months after stroke to examine these differences.
 
-#### **Section: [Path_additional_info]**
+Identifying *individual* improvement is difficult when measurements are noisy and recovery trajectories differ across people. Fixed thresholds such as the **Minimal Detectable Change (MDC)** or **Minimal Clinically Important Difference (MCID)** may vary with recovery stage, population and outcome, and are not always appropriate for comparing different measurement constructs. The paper therefore used a **model-based, uncertainty-aware approach**: longitudinal mixed-effects models characterize recovery, and posterior predictive simulations estimate each participant's probability of improving between baseline and follow-up. This is a statistical classification of positive change, **not** a claim that the magnitude of change is clinically important.
 
-Metadata and auxiliary information used for preprocessing.
+This repository makes that portion of the analysis usable on a tidy longitudinal CSV without the original study's REDCap infrastructure or private patient data.
 
+## Scope
 
-| Field	                               | Description	                                              | Required? | Example                             |
-| :----------------------------------- | :----------------------------------------------------------- | :-------: | :---------------------------------- | 
-| full_path_to_def_of_all_vars	       | Excel sheet mapping raw REDCap variable names to clean names |	Y         | metadata/variables_definitions.xlsx |
-| full_path_to_database_protocol	   | File indicating expected assessment time points	          | Y         | metadata/protocol.xlsx              |
-| full_path_to_redcap_data_corrections | CSV with manual corrections to recurring REDCap errors	      | N         | metadata/redcap_corrections.xlsx    |
-| full_path_time_point_completion_imu  | Table describing missing or incomplete IMU measurements	  | Y         | metadata/Timepoint_completion_imu.xlsx |
+**Included:**
 
+- Selection of random-effects and fixed-effects time structures for longitudinal mixed-effects models.
+- Population-level recovery curves with pointwise Gaussian fixed-effects confidence intervals.
+- Model-based estimation of a 90%-of-fitted-improvement time, with percentile intervals from Gaussian fixed-effect parameter draws.
+- Conditional best linear unbiased prediction (**BLUP**) of individual random effects using pre-endpoint observations.
+- Simulation of individual baseline-to-follow-up change, incorporating fixed-effects uncertainty, conditional random-effects uncertainty and residual variation, with optional outcome bounds and integer rounding.
+- Classification of improvement using the estimated probability of positive change (default **≥ 0.84**), plus plots and CSV outputs.
 
-#### **Section: [Path_processed_data]**
+**Not included:** the paper's cross-sectional correlations, longitudinal capacity–performance coupling regression, baseline predictor modeling, and other study-specific analyses. This code does not reconstruct the original clinical cohort or reproduce its numerical findings without the underlying data.
 
-Paths where preprocessed files and generated figures will be saved.
+## Installation
 
-| Field	                     | Description	                          | Example               |
-| :------------------------- | :------------------------------------- | :-------------------- | 
-| path_to_fig    	         | Output directory for figures           |	./fig/manuscript1/    |
-| path_corrected_redcap_data | Name of the corrected REDCap XLSX file |  redcap_corrected.csv |
-| path_formatted_redcap_data | REDCap table merged with IMU metrics   | redcap_IMU_merged.csv |
+Python **3.11** is recommended. In a terminal, from the repository folder:
 
+```bash
+conda create -n stroke-recovery python=3.11
+conda activate stroke-recovery
+python -m pip install -r requirements.txt
+```
 
-These files are created automatically by the pipeline.
+If you already have an appropriate Conda environment, activate it and install the requirements without creating another one.
 
-#### **Section: [Variables_manuscript1]**
+## Quick start: reproducible synthetic example
 
-Variables controlling the mixed-effects model analysis.
+Generate an **illustrative** dataset with 40 participants, five visits per participant, and ARAT, FAUR, FAUD and FAUI outcomes:
 
+```bash
+python generate_synthetic_data.py --n-participants 40 --seed 42
+```
 
-| Field	            | Type      | Description	                                         | Example               |
-| :---------------- | :-------: |:------------------------------------------------------ | :-------------------- | 
-| var_of_interest   | str       | Metric to be modeled                                   | arm_use_ratio_VQF     |
-| time_col          | str       | Variable describing time post-stroke                   | Days_post_stroke_tech |
-| required_time_points | List[str] | Minimum list of required time points per participant for the analysis | 0, 5 |
-| scale_factor_time | int       | Scaling factor to normalize time                       | 30                    | 
-| grouping_var      | str       | Grouping column (e.g., patients ID)                    | ID                    |
-| time_points_col   | str       | Column identifying discrete time points (T0, T3, etc.) | Tj                    |
+This creates `data/synthetic_longitudinal.csv`. The default synthetic ARAT generating trajectory is quadratic in log time; the three simulated functional arm-use outcomes have linear log-time generating trajectories. These choices demonstrate model selection and **are not estimates from the published cohort**.
 
-**Bounds for filtering**
+Fit the ARAT model, run 1,000 individual change simulations, and generate plots:
 
-Each of these fields is a float, used to remove physiologically implausible values.
+```bash
+python run_analysis.py --input data/synthetic_longitudinal.csv --outcome arat --simulate-change --n-simulations 1000 --n-parameter-draws 1000
+```
 
-Examples include:
+Outputs are written to `results/`. For a different synthetic outcome, change `--outcome` to `faur`, `faud` or `faui`.
 
-- upper_bound_arm_use_ratio_VQF
-- lower_bound_relative_duration_use_VQF_impaired
-- upper_bound_average_UL_activity_VQF_impaired
+Run the automated tests:
 
-(and others as needed)
+```bash
+python -m pytest -q
+```
 
-**Modeling parameters**
+## Use with your own data
 
-These specify the chosen fixed and random effects structures of the best-fitting MEM.
+Supply a CSV in **long format**, with one row per participant per visit. By default the following columns are expected:
 
-| Field	                   | Type      | Description	             | Example          |
-| :----------------------- | :-------: |:--------------------------- | :--------------- |
-| model_name               | str       | Model description           | quadratic_log_time | 
-| fixed_effects_structure  | str       | Fixed effects in the model  | log1p_time_c     |
-| random_effects_structure | str       | Random effects in the model | 1 + log1p_time_c |
-| rounds_outcome           | bool      | Round outcome to int (for ARAT for example) | True   |
+| Column | Meaning | Example |
+| --- | --- | --- |
+| `participant_id` | Participant identifier | `101` |
+| `timepoint` | Visit label | `T0`, `T1`, `T2`, `T3`, `T4` |
+| `days_post_stroke` | Numeric time since stroke, in days | `21`, `90`, `180` |
+| `arat` | Outcome to model (or another numeric outcome column) | `24` |
 
-**Visualization**
-| Field	                   | Type      | Description	             | Example          |
-| :----------------------- | :-------: |:--------------------------- | :--------------- |
-| color               | str       | Color for plotting           | tab:orange | 
-| category  | str       | Categorization abbreviation  | P     |
+Participant/visit pairs must be unique. For individual-change simulations, participants must have the specified baseline and endpoint visits and at least three observations. The code uses only observations **before the endpoint** to condition participant-specific random effects; the population model itself is fitted to all included observations. This is not independent prospective validation.
 
-**Potential predictors**
+Example with your own visit labels and an outcome named `score`:
 
-These specify which predictors could potentially best separate participants with significant change in capacity or performance. 
-| Field	                   | Type      | Description	             | Example          |
-| :----------------------- | :-------: |:--------------------------- | :--------------- |
-| binary_predictors        | str       | List of categorical binary predictors Yes/No          | MEP_is_negative | 
-| nominal_predictors       | str       | List of nominal predictors with 2 or more categories  | nat_str     |
-| continuous_predictors    | str       | List of pseudo-continuous predictors  | fma_total    |
-| target_k | int | Max number of predictors in model (depending the number of observations/IDs) | 3 |
+```bash
+python run_analysis.py --input data/my_longitudinal_data.csv --outcome score --id-col participant_id --time-col days_post_stroke --visit-col timepoint --baseline-visit T1 --endpoint-visit T4 --lower-bound 0 --upper-bound 57 --round-outcome --simulate-change --n-simulations 1000
+```
 
-**Basic usage of the scripts:**
+The code does **not** automatically apply the original study's protocol-specific exclusions or missingness criteria. Prepare and quality-check your dataset before analysis. For outcomes with different scales, explicitly set the appropriate bounds and direction. Default bounds are ARAT `[0,57]`, FAUR `[0,2]`, FAUD `[0,1]` (fraction), and FAUI `[0,∞)`; for a differently named outcome, no bounds are assumed.
 
-    python scripts/manuscript1_perf_vs_capacity/main_scripts.py --config .config/config_manuscript1_template.ini \
-    --var variable_of_interest 
+For a decreasing outcome (lower is better), use `--direction decrease`. The default is `increase`. Run `python run_analysis.py --help` for all options. **The `--direction` flag governs individual change classification; population plateau calculations infer direction from the fitted trajectory.**
 
-where **main_scripts.py** must be adapted to the specific script, and variable_of_interest is optional and should specify the chosen outcome variable (e.g., **arm_use_ratio_VQF**).
+### Time definitions
 
-# Dataset prepation: 
-Prepare and format the latest redcap datasheet. Report typo errors in *Clinical_data/metadata/redcap_corrections.xlsx*. Run *scripts/clean_redcap_data/preprocessing_redcap_data_main.py* (need to adapt config file). Process IMU data with the *imu_processing_tailor_study* git.
+The model uses time in units of `days_post_stroke / --time-scale` (default divisor: 30). Candidate fixed effects are linear time, log time, quadratic time and quadratic log time. Linear time is globally mean-centered. Log time is referenced to each participant's first observed visit, transformed with `log1p`, then globally mean-centered. Accordingly, the population plots and plateau times are expressed in **months since first observed visit**, not directly in months since stroke. Do not interpret them as absolute post-stroke plateau times without accounting for the baseline visit timing.
 
-Once processed, run *scripts/manuscript1_perf_vs_capacity/remove_invalid_trials.py* to copy Tj=1-2 to Tj=0 or 3, and remove the non-relevant time points. Run this script using the 3 modes: '', 'arat', and 'imu'.
+## Statistical methods
 
-## Analyze 1: Cross-sectional Correlation
-Run *scripts/manuscript1_perf_vs_capacity/main_cross_sectional_correlations.py*. Don't forget to update *path_formatted_redcap_data* in *config_manuscript1_arm_use_tracking.ini* to the latest version of the corrected and cleaned REDCap data (i.e. output of *remove_invalid_trials.py*). 
+**Model selection.** Candidate random-effects structures are evaluated first using a linear fixed time effect. Fixed-effects time formulations are subsequently compared using maximum likelihood. The simplest model within **4 AIC points** of the minimum is retained. The selected model is refitted using restricted maximum likelihood (REML). The random-effects selection stage uses a manually computed REML-AIC criterion consistent with the original analysis implementation; users should be aware that REML likelihood comparisons across different fixed-effects structures are generally inappropriate, which is why the fixed-effects stage uses ML.
 
-## Analyze 2: Measuring Longitudinal Coupling
-Run *scripts/manuscript1_perf_vs_capacity/main_longitudinal_coupling_perf_capacity.py* to model the coupling between performance and capacity over time. It first compute the delta scores between successive time points, then regress an OLS with participant-clustered robust SEs on the rate of change in performance with respect to the rate of change in capacity: 
-$$
-\text{rate}_{\mathrm{FAUR}} =
-\beta_0
-+ \beta_1\,\text{rate}_{\mathrm{ARAT}}
-+ \beta_2\,\text{time}_{\mathrm{centered}}
-+ \beta_3\,(\text{rate}_{\mathrm{ARAT}} \times \text{time}_{\mathrm{centered}})
-+ \varepsilon
-$$
+**Individual improvement.** For each eligible participant, the fitted model supplies a conditional Gaussian distribution of individual random effects given observations before the endpoint. Repeated draws from the estimated fixed-effects Gaussian distribution, the conditional random-effects distribution, and a residual distribution generate simulated baseline and endpoint outcomes. Residual draws are truncated when outcome bounds are specified. The fraction of simulations with strictly positive change (or strictly negative change for a decreasing outcome) is the estimated improvement probability. The default classification threshold is **probability ≥ 0.84**. The threshold is a methodological choice from the research analysis, not an MDC/MCID threshold.
 
-Note: The piecewise 2-knots regression for [Lhose et al. 2025] is implemented in scripts/manuscript1_perf_vs_capacity/main_longitudinal_correlation.py*. It probably needs more than 3/4 observations per participant to converge nicely, but could be a nice approach for the analysis of the 3 years long folow-ups.
+**Population curves and plateau.** Pointwise confidence bands use the fitted fixed-effect covariance and a Gaussian approximation. Uncertainty in the estimated 90%-of-improvement time and curve extremum is estimated by simulating Gaussian fixed-effect parameter draws and reporting percentiles. The reported curve extremum is within the **displayed observation horizon**, not necessarily a mathematical asymptote. The 90% threshold is anchored to the fitted baseline value. These calculations are *parametric simulations*, not participant-level bootstrap resampling.
 
-## Analyze 3: Find Best-Fitting Mixed Effect Model
-Use *scripts/manuscript1_perf_vs_capacity/main_find_best_fitting_mem_model.py* to determine the optimal mixed-effects model for *var_of_interest* as a function of *time_col*. 
+## Outputs
 
-1. Select the optimal random-effects structure (REML mode). <br>
-    Start with a fixed set of fixed effects and compare several candidate random-effects structures. <br>
-    Choose the model with the lowest AIC, and retain its random-effects specification.
+All outputs are written under `results/` (or a directory specified with `--output-dir`).
 
-2. Optimize the fixed-effects structure (ML mode). <br>
-    Using the selected random-effects structure, compare different fixed-effects formulations under maximum likelihood.<br>
-    Identify the fixed-effects structure that minimizes AIC.
+| File | Contents |
+| --- | --- |
+| `random_effects_comparison.csv` | Random-effects candidate comparisons |
+| `fixed_effects_comparison.csv` | Fixed-effects candidate comparisons |
+| `selected_model_summary.txt` | Selected model and fitted coefficients |
+| `fitting_diagnostics.log` | Detailed fitting diagnostics |
+| `covariance_diagnostics.txt` | Random-effects covariance diagnostics |
+| `population_trajectory_curve.csv` | Population curve and pointwise intervals |
+| `population_plateau_summary.csv` | Estimated 90%-of-improvement point and interval |
+| `population_plateau_draws.csv` | Fixed-effect simulation results for plateau estimation |
+| `population_trajectory.png` / `.pdf` | Population recovery trajectory |
+| `individual_change_summary.csv` | Per-participant improvement probability and classification |
+| `simulated_change_distributions.csv` | Simulated change values for each participant |
+| `individual_change_forest.png` / `.pdf` | Per-participant simulated changes and intervals |
+| `example_change_distributions.png` / `.pdf` | Example participant change distributions |
 
-3. Refit the final model on the full dataset, run model diagnostics, & evaluate model's performance. <br>
-    The final model is re-estimated using REML with the selected fixed and random effects. <br>
-    Model diagnostics assess whether mixed-effects model assumptions are met. <br>
-    Performance metrics are computed to understand how well the model generalizes to new patients.
-    (Note: this evaluation is indicative, as the primary goal is not prediction but identifying the model structure that best represents the population in our sample.)
+The last four output types are generated only when `--simulate-change` is supplied; figures can be suppressed with `--no-plots`. Population plateau CSVs are generated as part of the plotting step.
 
+## Citation
 
-Use *scripts/manuscript1_perf_vs_capacity/main_show_plateau_times_in_one_fig.py* to plot the plateau times with associated CI for all performance metrics and capacity. 
+If this implementation supports your work, please cite the associated paper:
 
-Use *scripts/manuscript1_perf_vs_capacity/main_dual_plot_to_show_plateau.py* to plot capacity and performance average recovery curve on the same plot. 
+Josse E, et al. *Wearable-Based Digital Metrics Reveal Dynamic Dissociations Between Upper Limb Capacity and Real-World Use Over the First Six Months After Stroke.* Research Square preprint (2026). https://doi.org/10.21203/rs.3.rs-9813697/v1
 
-## Analyze 4: Detect Participant with Significant Change
-Use *scripts/manuscript1_perf_vs_capacity/main_detect_significant_change.py* to detect which participants significantly changed in capacity or performance with respect to baseline or model-expected change.
+This reference will be updated when the final journal DOI becomes available.
 
-1. Fit the chosen MEM defined by config file (fixed and random structures). <br>
-    The model (fixed + random effects structure defined in the config) is fit once. We extract:
-    - population-level coefficients,
-    - participant-specific random effects, 
-    - covariance matrices and residual variance.
+## AI-assisted code standardization disclosure
 
-2. Simulate 1000 plausible trajectories per participant. <br>
-    For each simulation (see [Lang et al., 2021](https://doi.org/10.1097/NPT.0000000000000413)):
-    - sample new fixed-effect coefficients from their multivariate Normal distribution,
-    - sample participant-specific random effects from their posterior distribution,
-    - compute model-predicted values at last timepoint.
-
-3. Compute simulated change scores. <br>
-    Each simulation yields a predicted change between baseline and the chosen follow-up time. <br>
-    This results in a distribution of 1000 plausible change scores per participant.
-
-4. Compare observed vs. simulated change. <br>
-    The participant’s actual/predicted change is compared against their simulation distribution to determine whether it is greater-than-zero or greater-than-expected.
-
-Use *scripts/manuscript1_perf_vs_capacity/main_plot_change_detection.py* to visualize significant change detection in the population (Plots simulations' distributions per participant, pseudo p-values and z-scores, as well as CI).
-
-Use *scripts/manuscript1_perf_vs_capacity/main_compare_all_performance_and_capacity_groups.py* to build contingency tables of P>0, P=0 vs C>0, C=0 and see how many participants have been detected per group. 
-
-Use *scripts/manuscript1_perf_vs_capacity/main_plot_delta_vs_baseline.py* to identify which participants belong to which group, and check for ceiling effects.
-
-Use *scripts/manuscript1_perf_vs_capacity/patients_demographics_per_subgroup.py* to create summary tables of the demographics, clinical, and performance metrics scores per subgroup: C+P+, CP, C+P, CP+.
-
-Use *scripts/manuscript1_perf_vs_capacity/main_plot_population_avg_all.py* to plot all outcomes recovery average recovery curve with individuals' trajectories as well. 
-
-## Analyze 5: Find Best Predictors for Participants with Significant Change
-Use *scripts/manuscript1_perf_vs_capacity/main_find_best_predictors_of_categories.py* to perform a data-driven selection of the most important predictors from the hypothesis-based preselected set. 
-
-1. Select candidate predictors: Remove highly correlated variables (e.g., ∣𝑟∣>0.7) to avoid redundancy.
-
-2. Nested Cross-Validation for Selection:
-    - Inner loop (feature selection): 
-        Test all combinations of up to 3 predictors.
-        Fit a penalized (ridge) logistic regression for classification for each combination of candidate predictors.
-        Compute F1-score (balance of precision & recall).
-        Track how often each predictor appears among top-performing subsets.
-
-    - Outer loop (model validation):
-        Use the most frequently selected predictors.
-        Re-estimate the model and report its average F1-score.
-
-3. Final Model on Full Dataset: Refit the ordered logistic regression with the most common predictors 
-
-
-Use *scripts/manuscript1_perf_vs_capacity/main_violin_plots_to_visualize_predictor across_group.py* to visualize the distribution of the primary and secondary determinants of performance and capacity across "no improvement" and "significant improvement" groups. 
-
-Use *scripts/manuscript1_perf_vs_capacity/main_plot_all_OR.py* to plot all forest plots. 
+**Large language models (LLMs) were used to assist with refactoring, documenting, testing and standardizing the author's original research code into a standalone pipeline that is not tailored to the original dataset.** The statistical methodology originated from the research analysis described in the associated paper. The author reviewed the implementation and conducted numerical and synthetic-data validation checks. AI assistance does not imply that the original study data or results were generated by an LLM.

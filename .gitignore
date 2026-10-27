@@ -1,1 +1,36 @@
-.config/*personal*
+# Python and test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local environments and editor settings
+.venv/
+venv/
+env/
+.env
+.env.*
+.conda/
+.vscode/
+.idea/
+.config/
+
+# Generated datasets and outputs
+/data/*
+!/data/.gitkeep
+/results/*
+!/results/.gitkeep
+/validation_results/
+/smoke_log.txt
+*.log
+
+# Private-repository comparison: retain locally, do not publish
+/validate_against_original.py
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
