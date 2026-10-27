@@ -1,0 +1,23 @@
+Outcome: arat
+Selected random effects: 1 + log1p_time_c
+Selected fixed effects: quadratic_log_time (log1p_time_c + log1p_time2_c)
+
+                Mixed Linear Model Regression Results
+======================================================================
+Model:                 MixedLM      Dependent Variable:      arat     
+No. Observations:      200          Method:                  REML     
+No. Groups:            40           Scale:                   2.5964   
+Min. group size:       5            Log-Likelihood:          -601.0128
+Max. group size:       5            Converged:               Yes      
+Mean group size:       5.0                                            
+----------------------------------------------------------------------
+                          Coef.   Std.Err.    z    P>|z| [0.025 0.975]
+----------------------------------------------------------------------
+Intercept                  34.323    5.426   6.326 0.000 23.689 44.957
+log1p_time_c                8.869    3.288   2.698 0.007  2.425 15.312
+log1p_time2_c              -9.067    0.300 -30.182 0.000 -9.656 -8.478
+Group Var                1176.455                                     
+Group x log1p_time_c Cov  670.785                                     
+log1p_time_c Var          430.933                                     
+======================================================================
+

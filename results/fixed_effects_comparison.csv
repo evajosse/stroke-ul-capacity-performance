@@ -1,0 +1,5 @@
+name,formula,aic,converged,error
+linear_time,time_c,1261.3618697300524,True,
+log_time,log1p_time_c,1378.1374602985395,True,
+quadratic_time,time_c + time_c2,1228.9434679677572,True,
+quadratic_log_time,log1p_time_c + log1p_time2_c,1152.8595417707375,True,

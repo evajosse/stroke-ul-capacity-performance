@@ -1,0 +1,2 @@
+outcome,plateau_fraction,direction,asymptote_estimate,asymptote_ci_lower,asymptote_ci_upper,plateau_months_since_first_visit,plateau_ci_lower_months,plateau_ci_upper_months,n_parameter_draws,n_draws_with_crossing,note
+arat,0.9,increase,36.49206440399483,23.95813386639136,51.13401668279641,1.5553695955369595,1.189400278940028,2.1500697350069733,1000,997,Parametric Gaussian fixed-effect draws; 90% of fitted improvement within displayed time grid; not a cluster bootstrap.

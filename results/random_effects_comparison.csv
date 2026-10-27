@@ -1,0 +1,4 @@
+name,formula,aic,converged,error
+random_intercept,1,1463.264229328617,True,
+random_linear_slope,1 + time_c,1441.23480892694,True,
+random_log_slope,1 + log1p_time_c,1255.775868366152,True,

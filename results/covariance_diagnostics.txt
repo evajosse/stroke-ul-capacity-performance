@@ -1,0 +1,6 @@
+Random-effects covariance diagnostics
+Eigenvalues: [36.29407802160682, 1571.0939022161228]
+Condition number: 43.29
+Residual variance: 2.59643
+No near-singularity detected by the simple eigenvalue/condition-number check.
+This is a numerical diagnostic, not a formal model adequacy test.

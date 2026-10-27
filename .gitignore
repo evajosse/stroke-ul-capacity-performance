@@ -19,9 +19,7 @@ env/
 .config/
 
 # Generated datasets and outputs
-/data/*
 !/data/.gitkeep
-/results/*
 !/results/.gitkeep
 /validation_results/
 /smoke_log.txt
